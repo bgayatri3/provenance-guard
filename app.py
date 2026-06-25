@@ -14,6 +14,7 @@ from flask import Flask, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from audit_log import add_entry, get_log, init_db
 from signals.groq_signal import get_groq_score
 
 load_dotenv()
@@ -21,7 +22,23 @@ load_dotenv()
 # Reject submissions longer than this many characters (see "Edge Cases").
 MAX_TEXT_LENGTH = 10_000
 
+
+def score_to_attribution(score: float) -> str:
+    """Map an AI-likeness score in [0, 1] to a log attribution label.
+
+    Uses the planning.md thresholds. In M3 the only available score is the
+    Groq signal, so attribution is provisional; M4 will feed the blended
+    confidence score here instead.
+    """
+    if score >= 0.70:
+        return "likely_ai"
+    if score >= 0.30:
+        return "uncertain"
+    return "likely_human"
+
+
 app = Flask(__name__)
+init_db()
 
 # Rate limiting: per-client, 10 requests/minute on /submit (see spec).
 limiter = Limiter(
@@ -64,10 +81,22 @@ def submit():
 
     # TODO (M4): Signal 2 — stylometric heuristics -> stylo_score.
     # TODO (M4): confidence_score = 0.6 * groq_score + 0.4 * stylo_score.
-    # TODO (M4): map confidence_score to a transparency label via thresholds.
-    # TODO (M5): persist the result to the SQLite audit log.
+    # In M3 the Groq signal is our only score, so it stands in as the interim
+    # confidence and drives the provisional attribution.
+    confidence_score = groq_score
+    attribution = score_to_attribution(confidence_score)
 
     submission_id = str(uuid.uuid4())
+
+    # Persist a structured entry to the audit log on every submission.
+    add_entry(
+        content_id=submission_id,
+        creator_id=creator_id,
+        attribution=attribution,
+        confidence=confidence_score,
+        llm_score=groq_score,
+        status="classified",
+    )
 
     return jsonify(
         {
@@ -75,11 +104,12 @@ def submit():
             "creator_id": creator_id,
             "groq_score": groq_score,
             "groq_reason": groq_result["reason"],
+            "attribution": attribution,
+            "confidence_score": confidence_score,
             # Populated in later milestones:
             "stylo_score": None,
-            "confidence_score": None,
             "label": None,
-            "status": "Completed",
+            "status": "classified",
         }
     ), 200
 
@@ -88,6 +118,15 @@ def submit():
 def appeal():
     """Appeal a prior submission's label. Implemented in M5."""
     return jsonify({"error": "Not implemented yet."}), 501
+
+
+@app.route("/log", methods=["GET"])
+def log():
+    """Return the most recent audit log entries as JSON.
+
+    For documentation and grading visibility. A real system would require auth.
+    """
+    return jsonify({"entries": get_log()}), 200
 
 
 @app.route("/health", methods=["GET"])
