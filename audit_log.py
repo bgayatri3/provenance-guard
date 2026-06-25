@@ -41,7 +41,11 @@ def _connect():
 
 
 def init_db() -> None:
-    """Create the audit log table if it does not already exist."""
+    """Create the audit log table if it does not already exist.
+
+    `llm_score` is the Groq signal and `stylo_score` is the stylometric signal;
+    `confidence` is the blended score (0.6*llm + 0.4*stylo).
+    """
     with _connect() as conn:
         conn.execute(
             """
@@ -52,10 +56,15 @@ def init_db() -> None:
                 attribution TEXT    NOT NULL,
                 confidence  REAL,
                 llm_score   REAL,
+                stylo_score REAL,
                 status      TEXT    NOT NULL
             )
             """
         )
+        # Migration: add stylo_score to pre-existing tables that lack it.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(audit_log)")}
+        if "stylo_score" not in columns:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN stylo_score REAL")
 
 
 def utc_now_iso() -> str:
@@ -71,6 +80,7 @@ def add_entry(
     attribution: str,
     confidence: float | None,
     llm_score: float | None,
+    stylo_score: float | None,
     status: str = "classified",
     timestamp: str | None = None,
 ) -> dict:
@@ -82,15 +92,16 @@ def add_entry(
         "attribution": attribution,
         "confidence": confidence,
         "llm_score": llm_score,
+        "stylo_score": stylo_score,
         "status": status,
     }
     with _connect() as conn:
         conn.execute(
             """
             INSERT INTO audit_log
-                (content_id, creator_id, timestamp, attribution, confidence, llm_score, status)
+                (content_id, creator_id, timestamp, attribution, confidence, llm_score, stylo_score, status)
             VALUES
-                (:content_id, :creator_id, :timestamp, :attribution, :confidence, :llm_score, :status)
+                (:content_id, :creator_id, :timestamp, :attribution, :confidence, :llm_score, :stylo_score, :status)
             """,
             entry,
         )
@@ -105,3 +116,9 @@ def get_log(limit: int = 50) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+def clear_logs() -> str:
+    """Delete all audit log entries."""
+    with _connect() as conn:
+        cursor = conn.execute("DELETE FROM audit_log")
+    return f"Deleted {cursor.rowcount} audit log entr{'y' if cursor.rowcount == 1 else 'ies'}."

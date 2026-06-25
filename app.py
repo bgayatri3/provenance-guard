@@ -1,9 +1,9 @@
 """Provenance Guard — Flask server.
 
-Milestone M3 skeleton: the `POST /submit` route is wired up to validate input
-and run Signal 1 (Groq LLM assessment). Signal 2 (stylometrics), confidence
-scoring, the audit log (SQLite), and the `POST /appeal` endpoint are stubbed for
-later milestones. See planning.md.
+The `POST /submit` route validates input, runs both detection signals (Groq LLM
++ stylometrics), blends them into a confidence score, assigns a transparency
+label, and records a structured audit entry. `POST /appeal` is stubbed for M5.
+See planning.md.
 """
 
 import os
@@ -14,27 +14,15 @@ from flask import Flask, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from audit_log import add_entry, get_log, init_db
+from audit_log import add_entry, get_log, init_db, clear_logs
+from scoring import combine_scores, score_to_attribution, score_to_label
 from signals.groq_signal import get_groq_score
+from signals.stylometric_signal import get_stylometric_score
 
 load_dotenv()
 
 # Reject submissions longer than this many characters (see "Edge Cases").
 MAX_TEXT_LENGTH = 10_000
-
-
-def score_to_attribution(score: float) -> str:
-    """Map an AI-likeness score in [0, 1] to a log attribution label.
-
-    Uses the planning.md thresholds. In M3 the only available score is the
-    Groq signal, so attribution is provisional; M4 will feed the blended
-    confidence score here instead.
-    """
-    if score >= 0.70:
-        return "likely_ai"
-    if score >= 0.30:
-        return "uncertain"
-    return "likely_human"
 
 
 app = Flask(__name__)
@@ -79,22 +67,24 @@ def submit():
 
     groq_score = groq_result["ai_score"]
 
-    # TODO (M4): Signal 2 — stylometric heuristics -> stylo_score.
-    # TODO (M4): confidence_score = 0.6 * groq_score + 0.4 * stylo_score.
-    # In M3 the Groq signal is our only score, so it stands in as the interim
-    # confidence and drives the provisional attribution.
-    confidence_score = groq_score
+    # 3. Signal 2 — stylometric heuristics (pure Python, no external call).
+    stylo_score = round(get_stylometric_score(text)["stylo_score"],2)
+
+    # 4. Blend per planning.md: confidence = 0.6*groq + 0.4*stylo.
+    confidence_score = combine_scores(groq_score, stylo_score)
+    label = score_to_label(confidence_score)
     attribution = score_to_attribution(confidence_score)
 
     submission_id = str(uuid.uuid4())
 
-    # Persist a structured entry to the audit log on every submission.
+    # 5. Persist a structured entry to the audit log on every submission.
     add_entry(
         content_id=submission_id,
         creator_id=creator_id,
         attribution=attribution,
         confidence=confidence_score,
         llm_score=groq_score,
+        stylo_score=stylo_score,
         status="classified",
     )
 
@@ -104,11 +94,10 @@ def submit():
             "creator_id": creator_id,
             "groq_score": groq_score,
             "groq_reason": groq_result["reason"],
-            "attribution": attribution,
+            "stylo_score": stylo_score,
             "confidence_score": confidence_score,
-            # Populated in later milestones:
-            "stylo_score": None,
-            "label": None,
+            "attribution": attribution,
+            "label": label,
             "status": "classified",
         }
     ), 200
@@ -132,6 +121,11 @@ def log():
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/clearlogs", methods=["GET"])
+def clearlogs():
+    return clear_logs()
 
 
 if __name__ == "__main__":

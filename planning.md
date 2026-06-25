@@ -90,15 +90,21 @@ The model to assesses whether text reads as human or AI-generated. Captures sema
 ###
 2. **Stylometric heuristics**
 
-Analysize of measurable statistical properties that differ between human and AI writing — sentence length variance, type-token ratio (vocabulary diversity), punctuation density, or average sentence complexity. AI text tends to be more uniform; human writing is more variable. Computable in pure Python. The properties are normalized and combined into a single AI-likeness score between 0 and 1. An example format is given: 
+Analysis of measurable statistical properties that differ between human and AI writing. AI text tends to be more uniform and lexically sophisticated; casual human writing is more variable and informal. Computable in pure Python. Each property is normalized to an AI-likeness sub-score in [0, 1] (0 = human, 1 = AI) and combined:
 ```
-style_score = (
-    0.35 * normalized_sentence_variance +
-    0.30 * normalized_ttr +
-    0.20 * normalized_punctuation +
-    0.15 * normalized_complexity
+stylo_score = (
+    0.30 * sophistication +   # avg word length + ratio of long (>=7 char) words
+    0.25 * uniformity     +   # 1 - coefficient of variation of sentence length
+    0.15 * formality      +   # 1 - informal markers (lowercase starts, contractions)
+    0.30 * ai_markers         # density of AI cliché / transition phrases
 )
 ```
+**Calibration note (M4).** The original example set (sentence-length variance, type-token ratio, punctuation density, sentence complexity) was tested against annotated examples and revised:
+- **Type-token ratio** sat at 0.86–0.90 for *every* sample regardless of authorship — it is length-dependent and contributed nothing despite 30% weight. Replaced by **lexical sophistication** (word length), which cleanly separates casual human text from formal text.
+- **Punctuation density** tracked casual commas rather than AI-ness (the casual-human sample was the most punctuated). Replaced by **AI marker density** — the density of AI-favored transition/cliché phrases ("furthermore", "it is important to note", "paradigm", "stakeholders", …), which is the single feature that separates polished-AI text from polished-human text.
+- **Sentence variance** is kept but expressed as the scale-free **coefficient of variation** (stddev/mean) so it is comparable across submission lengths.
+
+This is a documented, deliberate change to the example formula (the spec offered it as "an example format"), driven by data rather than left to silently diverge.
 
 ### Final Score
 These two signals are genuinely independent: one is semantic, one is structural. That makes the combination more informative than either alone. The Groq Signal and stylometric heuristic will produce individual confidence scores [0, 1] where 0 is purely human, and 1 is purely AI. They will be weighted as follows: 
