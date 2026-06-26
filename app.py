@@ -123,7 +123,7 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-@app.route("/clearlogs", methods=["GET"])
+@app.route("/clearlogs", methods=["DELETE"])
 def clearlogs():
     return clear_logs()
 
