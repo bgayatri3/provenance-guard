@@ -2,7 +2,7 @@
 ### Description
 Provenance Guard takes the user's input and scores it as high-confidence AI, high confidence human, or uncertain. It accomplishes this goal through 2 primary endpoints: `POST /submit` and `POST /appeal` that run on a Flask server. 
 
-The submission endpoint takes in the user's input (and creator_id) and runs it through 2 signals (Groq LLM assesment + Stylometrics heuristics) and assigns the text a confidence score along with one of the 3 transparency labels noed above. It also adds the request to the audit log, and displays to the user the confidence score and label via a Gradio UI. Rate limiting is implemented on this endpoint. 
+The submission endpoint takes in the user's input (and creator_id) and runs it through 2 signals (Groq LLM assesment + Stylometrics heuristics) and assigns the text a confidence score along with one of the 3 transparency labels noed above. It also adds the request to the audit log, and displays to the user the confidence score and label via logging data. Rate limiting is implemented on this endpoint. 
 
 The appeal endpoint takes in a prior content ID and the user-entered reasoning for the appeal. Then, the appeal is recorded alongside the original decision, and the content's status is changed to `under_review`. 
 
