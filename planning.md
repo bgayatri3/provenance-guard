@@ -6,14 +6,12 @@ The submission endpoint takes in the user's input (and creator_id) and runs it t
 
 The appeal endpoint takes in a prior content ID and the user-entered reasoning for the appeal. Then, the appeal is recorded alongside the original decision, and the content's status is changed to `under_review`. 
 
-The UI allows the user to enter and analyzen new text via a text box and submit for review button. They can also scroll through prior submissions and their status (3 labels or `under_review`). The audit logs is always synced with the UI. 
-
 ### Overall Flow 
 ```
                                 Provenance Guard Architecture
 
                                       +----------------------+
-                                      |      Gradio UI       |
+                                      |    Postman Testing   |
                                       |----------------------|
                                       | • Enter text         |
                                       | • Submit for review  |
@@ -67,7 +65,7 @@ The UI allows the user to enter and analyzen new text via a text box and submit 
                           | audit entry                             | label + confidence
                           v                                         v
                  +----------------------+                 +----------------------+
-                 |      Audit Log       |<--------------->|      Gradio UI       |
+                 |      Audit Log       |<--------------->|        Postman       |
                  | • submissions        |      synced     | • Results            |
                  | • labels             |                 | • Submission history |
                  | • confidence         |                 | • Current status     |
@@ -289,9 +287,12 @@ Academic papers, technical documentation, or carefully edited business writing o
 ## AI Tool Plan
 ### M3 (submission endpoint + first signal)
 <!-- Which spec sections you'll provide to the AI tool (hint: your detection signals section + the diagram), what you'll ask it to generate (Flask app skeleton + the first signal function), and how you'll verify the output (test with a few inputs directly before wiring into the endpoint). -->
+Here Clausa was provided with the detection signals section, the overview, and diagrams of how the submit endpoint works. It began with a flash app sketeton and a stubbed function. I tested periodically after the first signal using Postman. 
 
 ### M4 (second signal + confidence scoring)
 <!-- Which spec sections you'll provide (detection signals + uncertainty representation + diagram), what you'll ask for (second signal function + scoring logic), and what you'll check (do scores vary meaningfully between clearly AI and clearly human text?). -->
+After asking clauda to wire in the second signal and confidence scoring, I tested with 6 examples from human, ai, and uncertain. With claude's suggestions I tweaked the styloheuristic algorithm because it always skewed the score no matter which. This demonstrated that the normalization was not effective. 
 
 ### M5 (production layer)
 <!-- Which spec sections you'll provide (label variants + appeals workflow + diagram), what you'll ask for (label generation logic + the /appeal endpoint), and h -->
+For the prodution layer, the label variants, appear workflow, and rate limiting sections were provided for code generation. Verification was accomplished through postman requests and examination of the logs. 
