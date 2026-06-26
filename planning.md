@@ -4,9 +4,9 @@ Provenance Guard takes the user's input and scores it as high-confidence AI, hig
 
 The submission endpoint takes in the user's input (and creator_id) and runs it through 2 signals (Groq LLM assesment + Stylometrics heuristics) and assigns the text a confidence score along with one of the 3 transparency labels noed above. It also adds the request to the audit log, and displays to the user the confidence score and label via a Gradio UI. Rate limiting is implemented on this endpoint. 
 
-The appeal endpoint takes in takes in a prior submission ID and the user entered reasoning for the appeal. Then, the appeal is updated alongside the original decision, and the content's status is changed to "under review". 
+The appeal endpoint takes in a prior content ID and the user-entered reasoning for the appeal. Then, the appeal is recorded alongside the original decision, and the content's status is changed to `under_review`. 
 
-The UI allows the user to enter and analyzen new text via a text box and submit for review button. They can also scroll through prior submissions and their status (3 labels or under review). The audit logs is always synced with the UI. 
+The UI allows the user to enter and analyzen new text via a text box and submit for review button. They can also scroll through prior submissions and their status (3 labels or `under_review`). The audit logs is always synced with the UI. 
 
 ### Overall Flow 
 ```
@@ -36,7 +36,7 @@ The UI allows the user to enter and analyzen new text via a text box and submit 
                         +----------------+          +----------------------+
                         | Groq LLM       |          | Update Submission    |
                         | Assessment     |          | Status               |
-                        +-------+--------+          | -> Under Review      |
+                        +-------+--------+          | -> under_review      |
                                 |                   +----------+-----------+
                                 | signal score                 |
                                 v                              |
@@ -162,36 +162,37 @@ This limit was chosen because the tool is interactive, and not intended for bulk
 
 ---
 ## Endpoint 2: `POST /appeal`
-Allows any user who previously submitted text to appeal the assigned transparency label. The user provides the submission ID and a short explanation of why they believe the result is incorrect. The original decision is preserved, while the submission status is updated to Under Review.
+Allows any user who previously submitted text to appeal the assigned transparency label. The user provides the content ID (the `submission_id` returned by `/submit`) and a short explanation of why they believe the result is incorrect. The original decision is preserved, while the status is updated to `under_review`. No automated re-classification is performed — appeals are queued for a human reviewer.
 
 ### Input
 ```
 { 
-    "submission_id": "...", 
-    "appeal_reason": "<user explanation>" 
+    "content_id": "...", 
+    "creator_reasoning": "<user explanation>" 
 }
 ```
 ### Processing
-1. Verify that the submission ID exists.
-2. Record the appeal reason and timestamp.
-3. Update the submission status to Under Review.
-4. Preserve the original confidence score and transparency label.
-5. Update the audit log with the appeal information.
+1. Verify that the `content_id` exists (404 if not).
+2. Record the appeal reasoning (stored as `appeal_reasoning`) and timestamp (`appealed_at`).
+3. Update the entry's status to `under_review`.
+4. Preserve the original confidence score, signal scores, and transparency label.
+5. Update the audit log entry in place with the appeal information.
 
 A human reviewer would see:
 
 - Original submitted text
 - Original confidence score
 - Original transparency label
-- Appeal reason
+- Appeal reasoning
 - Submission timestamp
-- Current status ("Under Review")
+- Current status (`under_review`)
 ### Output
 ```
 { 
-    "submission_id": "...", 
-    "status": "Under Review", 
-    "message": "Appeal successfully submitted." 
+    "content_id": "...", 
+    "status": "under_review", 
+    "appeal_reasoning": "<user explanation>",
+    "message": "Appeal successfully received and is now under review." 
 }
 ```
 ---

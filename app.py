@@ -14,7 +14,7 @@ from flask import Flask, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from audit_log import add_entry, get_log, init_db, clear_logs
+from audit_log import add_entry, clear_logs, get_log, init_db, record_appeal
 from scoring import combine_scores, score_to_attribution, score_to_label
 from signals.groq_signal import get_groq_score
 from signals.stylometric_signal import get_stylometric_score
@@ -105,8 +105,36 @@ def submit():
 
 @app.route("/appeal", methods=["POST"])
 def appeal():
-    """Appeal a prior submission's label. Implemented in M5."""
-    return jsonify({"error": "Not implemented yet."}), 501
+    """Appeal a prior classification.
+
+    Input (JSON):  {"content_id": "<id>", "creator_reasoning": "<explanation>"}
+    Updates the entry's status to "under_review", logs the appeal reasoning
+    alongside the preserved original decision, and returns a confirmation. No
+    automated re-classification is performed.
+    """
+    data = request.get_json(silent=True) or {}
+    content_id = data.get("content_id")
+    creator_reasoning = data.get("creator_reasoning")
+
+    # Validate input.
+    if not content_id or not isinstance(content_id, str):
+        return jsonify({"error": "Field 'content_id' is required."}), 400
+    if not creator_reasoning or not isinstance(creator_reasoning, str) or not creator_reasoning.strip():
+        return jsonify({"error": "Field 'creator_reasoning' is required and must be non-empty."}), 400
+
+    # Update status to "under_review" and log the appeal against the original entry.
+    updated = record_appeal(content_id, creator_reasoning.strip())
+    if updated is None:
+        return jsonify({"error": f"No submission found with content_id '{content_id}'."}), 404
+
+    return jsonify(
+        {
+            "content_id": content_id,
+            "status": updated["status"],
+            "appeal_reasoning": updated["appeal_reasoning"],
+            "message": "Appeal successfully received and is now under review.",
+        }
+    ), 200
 
 
 @app.route("/log", methods=["GET"])

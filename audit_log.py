@@ -57,14 +57,17 @@ def init_db() -> None:
                 confidence  REAL,
                 llm_score   REAL,
                 stylo_score REAL,
-                status      TEXT    NOT NULL
+                status      TEXT    NOT NULL,
+                appeal_reasoning TEXT,
+                appealed_at      TEXT
             )
             """
         )
-        # Migration: add stylo_score to pre-existing tables that lack it.
+        # Migration: add columns to pre-existing tables that lack them.
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(audit_log)")}
-        if "stylo_score" not in columns:
-            conn.execute("ALTER TABLE audit_log ADD COLUMN stylo_score REAL")
+        for col, col_type in (("stylo_score", "REAL"), ("appeal_reasoning", "TEXT"), ("appealed_at", "TEXT")):
+            if col not in columns:
+                conn.execute(f"ALTER TABLE audit_log ADD COLUMN {col} {col_type}")
 
 
 def utc_now_iso() -> str:
@@ -106,6 +109,39 @@ def add_entry(
             entry,
         )
     return entry
+
+
+def get_entry(content_id: str) -> dict | None:
+    """Return a single audit entry by content_id, or None if it does not exist."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM audit_log WHERE content_id = ?", (content_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def record_appeal(content_id: str, appeal_reasoning: str) -> dict | None:
+    """Record an appeal against an existing entry.
+
+    Updates the entry in place: sets status to "under_review" and stores the
+    appeal reasoning + timestamp, while preserving the original classification
+    (scores, label, attribution). Returns the updated entry, or None if the
+    content_id does not exist.
+    """
+    if get_entry(content_id) is None:
+        return None
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE audit_log
+               SET status = 'under_review',
+                   appeal_reasoning = ?,
+                   appealed_at = ?
+             WHERE content_id = ?
+            """,
+            (appeal_reasoning, utc_now_iso(), content_id),
+        )
+    return get_entry(content_id)
 
 
 def get_log(limit: int = 50) -> list[dict]:
