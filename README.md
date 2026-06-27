@@ -112,49 +112,90 @@ These two signals are genuinely independent: one is semantic, one is structural.
 
 ---
 ## Example Scoring 
- <!-- include two example submissions with noticeably different confidence scores — one high-confidence and one lower-confidence case — showing the actual scores (you can lift these from your Milestone 4 testing). This is what shows your scoring produces meaningful variation, not a constant. -->
-### Confident AI
+| Text | Attribution | Overall Confidence | Groq Confidence | Stylometric Confidence |
+| --- | -- | -- | --- | --- |
+| "ok so i finally tried that new ramen place downtown and honestly? underwhelming. the broth was fine but they put WAY too much sodium in it and i was thirsty for like three hours after. my friend got the spicy version and said it was better. probably won't go back unless someone drags me there" | likely_human | 0.132 | 0.2 | 0.03 |
+| "The headphones have good sound quality for the price, especially if you're mostly listening to podcasts or casual music. Battery life has been consistent so far, although the touch controls occasionally register accidental taps. Overall, I'd probably recommend them if they're on sale" | uncertain | 0.324 | 0.2 | 0.51 |
+| "Remote work has changed how many people approach productivity. Some employees appreciate the flexibility because it reduces commuting time and allows for a better work-life balance. Others find it harder to stay focused without a dedicated office space. In many cases, the effectiveness of remote work depends on the individual and the type of work being performed." | uncertain | 0.688 | 0.8 | 0.52 |
+| "Artificial intelligence represents a transformative paradigm shift in modern society. It is important to note that while the benefits of AI are numerous, it is equally essential to consider the ethical implications. Furthermore, stakeholders across various sectors must collaborate to ensure responsible deployment." | likely_ai | 0.844 | 0.8 | 0.91 |
 
-### Confident Human
 
-### Uncertain #1
-
-### Uncertain #2
+As shown in the examples above, scoring produces meaningful variation when text is more or less likely to be AI generated. The defined threshold and unique combination of the signal produce this intended result.
 
 ---
 ## Rate Limiting 
-<!-- README documents the specific limits chosen and provides reasoning tied to realistic usage patterns on a writing platform — not just "I used the default." -->
+The `/submit` endpoint is protected using Flask-Limiter with a limit of 10 requests per minute per client. This limit was chosen because Provenance Guard is intended for interactive user; users can submit one piece of writing at a time for analysis. Ten requests per minute allows users to test multiple revisions without interruption. At the same time, automated spam, denial-of-service attempts, and excessive Groq API usage is discouraged.
 
 ---
 ## Audit Log
-<!-- README documents the specific limits chosen and provides reasoning tied to realistic usage patterns on a writing platform — not just "I used the default." -->
 ### Storage
 Logs are stored in json in locally stored via SQLite. 
 
-### Example Log of 3 Log Entries 
+### Example of 3 Log Entries 
+```
+{
+            "appeal_reasoning": null,
+            "appealed_at": null,
+            "attribution": "uncertain",
+            "confidence": 0.6759999999999999,
+            "content_id": "c8eb5ea8-c248-4a2c-9b61-92200d7786d8",
+            "creator_id": "ratelimit-test",
+            "llm_score": 0.8,
+            "status": "classified",
+            "stylo_score": 0.49,
+            "timestamp": "2026-06-26T20:55:49.479Z"
+        },
+        {
+            "appeal_reasoning": null,
+            "appealed_at": null,
+            "attribution": "uncertain",
+            "confidence": 0.6759999999999999,
+            "content_id": "934a6596-1c9b-4fc3-aad8-cb12c6debb79",
+            "creator_id": "ratelimit-test",
+            "llm_score": 0.8,
+            "status": "classified",
+            "stylo_score": 0.49,
+            "timestamp": "2026-06-26T20:55:48.914Z"
+        },
+        {
+            "appeal_reasoning": "I wrote this myself from personal experience. I am a non-native English speaker and my writing style may appear more formal than typical.",
+            "appealed_at": "2026-06-26T20:52:24.672Z",
+            "attribution": "uncertain",
+            "confidence": 0.324,
+            "content_id": "888fe81e-59f3-404d-9f63-375f98307fbc",
+            "creator_id": "test-user-1",
+            "llm_score": 0.2,
+            "status": "under_review",
+            "stylo_score": 0.51,
+            "timestamp": "2026-06-25T23:53:32.039Z"
+        }
+```
 
 ---
 ## Limitations 
-<!-- Known limitations section names at least one specific content type the system would likely misclassify, with explanation tied to the signals — not a generic disclaimer. -->
+The stylometric heuristics are inherently less accurate than the Groq LLM classifier because they rely only on measurable writing characteristics (e.g., sentence length variance, vocabulary diversity, and punctuation) and cannot capture semantic meaning or context. To account for this, the final confidence score weights the Groq signal more heavily (60%) than the stylometric signal (40%). 
 
+Additionally, stylometric analysis becomes less reliable for very short submission  because there is insufficient text to compute meaningful writing statistics. Often times these would be classified as uncertain. The current feature weights and confidence thresholds were selected heuristically rather than being calibrated on a large dataset. An improvment would be to evaluate the system on 100+ human-written, AI-generated, and mixed-authorship samples. This would allow the stylometric feature weights and overall confidence thresholds to be refined, improving accuracy and calibration across a wider range of writing styles.
 ---
 ## Spec Reflection 
 ### How the Spec Helped
+The specification established the API contracts, processing pipeline, and expected behavior before implementation began. Defining the endpoints, confidence scoring, audit logging, and appeal workflow upfront made it easier to implement each component independently while ensuring they integrated correctly.
 
 ### Divergence 
+Minor adjustments were made during development. For example, some manual refining the confidence score threshold was done. Also, I tried out some different stylometric heuristics to keep the system lightweight while still providing an independent detection signal since the original recommendation skewed confidence scores low. 
 
 ---
 ## AI usage
 ### AI Assistance Instance #1
-Task: Asked ChatGPT to review the label taxonomy and generate edge-case examples that sat between Review and Literary Analysis.
+Task: Generate an initial architecture diagram and API flow for the submission and appeal endpoints.
 
-Output Used: Several generated examples were used to test whether the label definitions were sufficiently distinct before annotation began
+Output Used: ASCII diagrams illustrating the POST /submit and POST /appeal workflows.
 
-Your Revisions: I refined the definitions by emphasizing the difference between evaluating a book (Review) and interpreting how a book creates meaning (Literary Analysis).
+Your Revisions: Updated the diagrams to match the final implementation, including the Groq classifier, stylometric heuristics, confidence scoring, transparency labels. 
 
 ### AI Assistance Instance #2
-Task: Asked ChatGPT to analyze model errors and identify common patterns in the misclassified examples.
+Task: Generate function to create logging SQLite 
 
-Output Used: e AI identified recurring confusion between Question/Discussion and Review posts and suggested possible explanations for the pattern.
+Output Used: Python code generated for basic logging CRUD. 
 
-Your Revisions: I manually reviewed each incorrect prediction and verified the suggested patterns before incorporating them into the evaluation section. I also rejected the AI's initial assumption that Review and Literary Analysis would be the dominant source of confusion because the confusion matrix did not support that conclusion.
+Your Revisions: Modified some of the SQL statements to improve column naming, and added a delete logs for easier testing. 
