@@ -177,6 +177,7 @@ Logs are stored in json in locally stored via SQLite.
 The stylometric heuristics are inherently less accurate than the Groq LLM classifier because they rely only on measurable writing characteristics (e.g., sentence length variance, vocabulary diversity, and punctuation) and cannot capture semantic meaning or context. To account for this, the final confidence score weights the Groq signal more heavily (60%) than the stylometric signal (40%). 
 
 Additionally, stylometric analysis becomes less reliable for very short submission  because there is insufficient text to compute meaningful writing statistics. Often times these would be classified as uncertain. The current feature weights and confidence thresholds were selected heuristically rather than being calibrated on a large dataset. An improvment would be to evaluate the system on 100+ human-written, AI-generated, and mixed-authorship samples. This would allow the stylometric feature weights and overall confidence thresholds to be refined, improving accuracy and calibration across a wider range of writing styles.
+
 ---
 ## Spec Reflection 
 ### How the Spec Helped
