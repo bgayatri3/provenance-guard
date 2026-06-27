@@ -169,6 +169,7 @@ Logs are stored in json in locally stored via SQLite.
             "stylo_score": 0.51,
             "timestamp": "2026-06-25T23:53:32.039Z"
         }
+}
 ```
 
 ---
